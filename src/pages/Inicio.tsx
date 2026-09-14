@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useMonth } from '../contexts/MonthContext';
 import { useAccounts } from '../hooks/useAccounts';
@@ -24,6 +25,7 @@ export function Inicio() {
   const { user } = useAuth();
   const { month, isCurrentMonth } = useMonth();
   const cierre = useCierre();
+  const navigate = useNavigate();
 
   const accounts = useAccounts();
   const history = useNetWorthHistory(6);
@@ -178,18 +180,28 @@ export function Inicio() {
             />
           </div>
 
-          {reminder && !completion.done && (
-            <div className="card" style={{ background: 'var(--color-amber-bg)' }}>
-              <span className="card-label" style={{ color: 'var(--color-amber)' }}>
-                Día {reminder.day_of_month} · {reminder.title}
-              </span>
-              <span style={{ font: '400 14px/1.55 Outfit, sans-serif', textWrap: 'pretty' }}>{reminder.body}</span>
-              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                <button className="btn btn-dark" onClick={() => completion.markDone()}>
-                  Marcar hecho
-                </button>
+          {reminder ? (
+            !completion.done && (
+              <div className="card" style={{ background: 'var(--color-amber-bg)' }}>
+                <span className="card-label" style={{ color: 'var(--color-amber)' }}>
+                  Día {reminder.day_of_month} · {reminder.title}
+                </span>
+                <span style={{ font: '400 14px/1.55 Outfit, sans-serif', textWrap: 'pretty' }}>{reminder.body}</span>
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <button className="btn btn-dark" onClick={() => completion.markDone()}>
+                    Marcar hecho
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => reminders.remove(reminder.id)}>
+                    Quitar recordatorio
+                  </button>
+                </div>
               </div>
-            </div>
+            )
+          ) : (
+            <ReminderSetup
+              defaultBody={`Separar antes de gastar: ${formatCLP(savings.total)} de ahorro y ${formatCLP(fixed.total)} de fijos. El orden importa más que el monto.`}
+              onCreate={(day, body) => reminders.insert({ day_of_month: day, title: 'Llega la mesada', body, active: true } as never)}
+            />
           )}
         </div>
       </div>
@@ -228,7 +240,7 @@ export function Inicio() {
             </NavLink>
           </div>
           {nearestGoals.length === 0 ? (
-            <EmptyState title="Todavía no hay metas" body="Una meta necesita monto, fecha y por qué la quieres." actionLabel="Crear la primera meta" onAction={() => (window.location.href = '/metas')} />
+            <EmptyState title="Todavía no hay metas" body="Una meta necesita monto, fecha y por qué la quieres." actionLabel="Crear la primera meta" onAction={() => navigate('/metas')} />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 4 }}>
               {nearestGoals.map((g) => (
@@ -261,13 +273,76 @@ export function Inicio() {
           title="Sin cuentas no hay patrimonio"
           body="Agrega tu primera cuenta para que el patrimonio neto, el balance y las proyecciones empiecen a construirse."
           actionLabel="Agregar primera cuenta"
-          onAction={() => (window.location.href = '/cuentas')}
+          onAction={() => navigate('/cuentas')}
         />
       )}
 
       <button className="btn btn-primary" style={{ alignSelf: 'flex-start' }} onClick={cierre.open}>
         Cerrar {formatMonthYear(month)}
       </button>
+    </div>
+  );
+}
+
+/** El recordatorio mensual del día de la mesada: se crea desde acá. */
+function ReminderSetup({ defaultBody, onCreate }: { defaultBody: string; onCreate: (day: number, body: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [day, setDay] = useState(7);
+  const [body, setBody] = useState(defaultBody);
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => {
+          setBody(defaultBody);
+          setOpen(true);
+        }}
+        className="card"
+        style={{ alignItems: 'flex-start', gap: 6, cursor: 'pointer', border: 0, textAlign: 'left' }}
+      >
+        <span className="card-label">Recordatorio mensual</span>
+        <span style={{ font: '400 13.5px/1.5 Outfit, sans-serif', color: 'var(--color-graphite-2)' }}>
+          Avisarte el día que llega la mesada para separar ahorro y fijos antes de gastar.
+        </span>
+        <span style={{ font: '500 13px Outfit, sans-serif', color: 'var(--color-accent)', marginTop: 4 }}>Crear recordatorio</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="card" style={{ gap: 12 }}>
+      <span className="card-label">Recordatorio mensual</span>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ font: '400 13px Outfit, sans-serif' }}>Día del mes</span>
+        <input
+          type="number"
+          min={1}
+          max={31}
+          value={day}
+          onChange={(e) => setDay(Number(e.target.value))}
+          style={{ width: 70, border: '1.5px solid var(--color-hairline-input)', borderRadius: 10, padding: '8px 10px', font: '400 13px Outfit, sans-serif' }}
+        />
+      </label>
+      <textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        rows={3}
+        style={{ border: '1.5px solid var(--color-hairline-input)', borderRadius: 12, padding: '10px 12px', font: '400 13px Outfit, sans-serif', resize: 'vertical' }}
+      />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            onCreate(day, body);
+            setOpen(false);
+          }}
+        >
+          Guardar
+        </button>
+        <button className="btn btn-ghost" onClick={() => setOpen(false)}>
+          Cancelar
+        </button>
+      </div>
     </div>
   );
 }

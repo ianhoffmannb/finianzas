@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { MonthProvider } from './contexts/MonthContext';
 import { CierreProvider } from './contexts/CierreContext';
@@ -37,6 +37,7 @@ export default function App() {
             <Route path="/proyecciones" element={<Proyecciones />} />
             <Route path="/cuentas" element={<Cuentas />} />
             <Route path="/hogar" element={<Hogar />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>

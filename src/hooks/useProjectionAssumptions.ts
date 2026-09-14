@@ -45,5 +45,12 @@ export function useProjectionAssumptions() {
     if (row) setData(row as ProjectionAssumptions);
   }
 
-  return { assumptions: data ?? { ...DEFAULTS, id: '', user_id: user?.id ?? '', updated_at: '' }, loading, save };
+  return {
+    assumptions: data ?? { ...DEFAULTS, id: '', user_id: user?.id ?? '', updated_at: '' },
+    // Sin fila guardada, lo que se muestra son valores por defecto de la app,
+    // no supuestos del usuario: la vista lo dice en vez de disfrazarlos.
+    configured: data !== null,
+    loading,
+    save,
+  };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useCierre } from '../contexts/CierreContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -40,6 +40,7 @@ export function Header() {
   const cierre = useCierre();
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -51,7 +52,7 @@ export function Header() {
     return () => document.removeEventListener('mousedown', onClick);
   }, [menuOpen]);
 
-  const currentLabel = ALL_ITEMS.find((i) => i.to === window.location.pathname)?.label ?? 'Inicio';
+  const currentLabel = ALL_ITEMS.find((i) => i.to === location.pathname)?.label ?? 'Inicio';
 
   return (
     <header

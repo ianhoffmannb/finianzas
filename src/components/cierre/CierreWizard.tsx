@@ -34,11 +34,17 @@ export function CierreWizard({ onClose }: { onClose: () => void }) {
   const goals = useGoals();
   const monthClose = useMonthClose(month);
 
+  // Every field is "edit on top of what the DB says": null means untouched, so
+  // the stored value still shows once it loads. Seeding state up front would
+  // freeze the defaults captured on the first render, before any data arrives.
   const [incomeAmounts, setIncomeAmounts] = useState<Record<string, number>>({});
   const [accountBalances, setAccountBalances] = useState<Record<string, number>>({});
-  const [usdRate, setUsdRate] = useState<number>(() => accounts.rows.find((a) => a.currency === 'USD')?.fx_rate ?? 900);
-  const [variableReal, setVariableReal] = useState<number>(() => variableActual.amount || variableBudget.budget?.monthly_cap || 0);
+  const [usdRateEdit, setUsdRateEdit] = useState<number | null>(null);
+  const [variableRealEdit, setVariableRealEdit] = useState<number | null>(null);
   const [goalContribs, setGoalContribs] = useState<Record<string, number>>({});
+
+  const usdRate = usdRateEdit ?? accounts.rows.find((a) => a.currency === 'USD')?.fx_rate ?? 0;
+  const variableReal = variableRealEdit ?? variableActual.amount ?? 0;
 
   function incomeAmount(id: string, fallback: number) {
     return incomeAmounts[id] ?? fallback;
@@ -94,16 +100,24 @@ export function CierreWizard({ onClose }: { onClose: () => void }) {
       // 3. variable actual
       await variableActual.setAmount(variableReal);
 
-      // 4. goal contributions
+      // 4. goal contributions — apply only the delta against what this month
+      // already contributed, so re-closing a month doesn't double-count.
+      const { data: priorRows } = await supabase
+        .from('goal_contributions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('month', month);
+      const prior = new Map((priorRows ?? []).map((r: { goal_id: string; amount: number }) => [r.goal_id, r.amount]));
+
       for (const g of goals.rows) {
         const contrib = goalContrib(g.id, g.monthly_contribution);
-        if (contrib > 0) {
-          await supabase.from('goal_contributions').upsert(
-            { goal_id: g.id, user_id: user.id, month, amount: contrib },
-            { onConflict: 'goal_id,month' }
-          );
-          await goals.update(g.id, { current_amount: g.current_amount + contrib } as never);
-        }
+        const already = prior.get(g.id) ?? 0;
+        if (contrib === already) continue;
+        await supabase.from('goal_contributions').upsert(
+          { goal_id: g.id, user_id: user.id, month, amount: contrib } as never,
+          { onConflict: 'goal_id,month' }
+        );
+        await goals.update(g.id, { current_amount: g.current_amount + contrib - already } as never);
       }
 
       // 5. finalize month close
@@ -187,7 +201,7 @@ export function CierreWizard({ onClose }: { onClose: () => void }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                     <span style={{ font: '500 13px Outfit, sans-serif' }}>Dólar observado</span>
-                    <MoneyInput value={usdRate} onChange={setUsdRate} prefix="$" suffix="CLP" />
+                    <MoneyInput value={usdRate} onChange={setUsdRateEdit} prefix="$" suffix="CLP" />
                   </div>
                   <div />
                   {accounts.rows.map((a) => {
@@ -211,7 +225,7 @@ export function CierreWizard({ onClose }: { onClose: () => void }) {
                       <span style={{ font: '500 13px Outfit, sans-serif' }}>Variables reales del mes</span>
                       <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>presupuesto {formatCLP(variableBudget.budget?.monthly_cap ?? 0)}</span>
                     </div>
-                    <MoneyInput value={variableReal} onChange={setVariableReal} suffix="CLP" />
+                    <MoneyInput value={variableReal} onChange={setVariableRealEdit} suffix="CLP" />
                     <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>Un solo número. Sin desglose.</span>
                   </div>
                 </div>

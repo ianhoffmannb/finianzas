@@ -23,8 +23,13 @@ export function useCollection<T extends { id: string }>(
 
   const filterKey = JSON.stringify(filters);
 
+  // A filter whose value is still empty means the caller is waiting on
+  // something (a row id that hasn't loaded yet). Querying anyway sends
+  // `col=eq.` and Postgres rejects it as an invalid uuid.
+  const pending = filters.some((f) => f.value === '' || f.value === undefined || f.value === null);
+
   const refetch = useCallback(async () => {
-    if (!user) {
+    if (!user || pending) {
       setRows([]);
       setLoading(false);
       return;
@@ -41,7 +46,7 @@ export function useCollection<T extends { id: string }>(
     }
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table, user?.id, filterKey, orderBy?.column, orderBy?.ascending]);
+  }, [table, user?.id, filterKey, pending, orderBy?.column, orderBy?.ascending]);
 
   useEffect(() => {
     refetch();

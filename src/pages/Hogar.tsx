@@ -4,7 +4,7 @@ import { useHousehold } from '../hooks/useHousehold';
 import { EditableList } from '../components/EditableList';
 import { ReceiptDropzone } from '../components/ReceiptDropzone';
 import { formatCLP } from '../utils/money';
-import { formatMonthYear, addMonths } from '../utils/date';
+import { formatMonthYear, addMonths, formatDayMonth } from '../utils/date';
 import type { HouseholdExpense } from '../types/models';
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -85,7 +85,7 @@ export function Hogar() {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 20 }}>
-        <HogarStat label="Recibido" value={formatCLP(household.incomeRecord?.amount ?? 0)} sub={household.incomeRecord?.received_on ? `el ${household.incomeRecord.received_on}` : 'sin registrar'} />
+        <HogarStat label="Recibido" value={formatCLP(household.incomeRecord?.amount ?? 0)} sub={household.incomeRecord?.received_on ? `el ${formatDayMonth(household.incomeRecord.received_on)}` : 'sin registrar'} />
         <HogarStat label="Gastado" value={formatCLP(household.totalSpent)} sub={household.incomeRecord ? `${((household.totalSpent / (household.incomeRecord.amount || 1)) * 100).toFixed(0)}% del mes` : ''} />
         <HogarStat label="Por rendir" value={formatCLP(household.pending)} sub="saldo en efectivo" amber />
         <HogarStat label="Tu patrimonio" value="sin efecto" sub="$0 de esto es tuyo" dashed />
@@ -115,7 +115,7 @@ export function Hogar() {
             onDelete={(id) => household.expenses.remove(id)}
             renderRow={(item, a) => (
               <div className="ledger-row" style={{ borderTop: '1px solid var(--hogar-row)' }}>
-                <span style={{ font: '500 12px Outfit, sans-serif', color: 'var(--hogar-muted-2)', width: 46 }}>{item.spent_on.slice(8, 10)}/{item.spent_on.slice(5, 7)}</span>
+                <span style={{ font: '500 12px Outfit, sans-serif', color: 'var(--hogar-muted-2)', width: 46 }}>{formatDayMonth(item.spent_on)}</span>
                 <span className="label" style={{ color: 'var(--hogar-ink)' }}>{item.label}</span>
                 <span className="amount" style={{ color: 'var(--hogar-ink)' }}>{formatCLP(item.amount)}</span>
                 <button onClick={a.onEdit} style={ghostBtn}>editar</button>
@@ -187,7 +187,7 @@ function AverageCard({ months, current }: { months: string[]; current: number })
       <span style={{ font: '600 12.5px Outfit, sans-serif', color: 'var(--hogar-muted-2)' }}>Mes actual</span>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <div className="ledger-row" style={{ borderTop: '1px solid var(--hogar-row)', borderBottom: '1px solid var(--hogar-row)' }}>
-          <span className="label" style={{ fontWeight: 500, color: 'var(--hogar-ink)' }}>{months[months.length - 1].slice(0, 7)}</span>
+          <span className="label" style={{ fontWeight: 500, color: 'var(--hogar-ink)' }}>{formatMonthYear(months[months.length - 1])}</span>
           <span style={{ font: '500 13px Outfit, sans-serif', color: 'var(--hogar-ink)', fontVariantNumeric: 'tabular-nums' }}>{formatCLP(current)}</span>
         </div>
       </div>

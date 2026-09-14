@@ -1,4 +1,6 @@
 import { useMemo, useState, type CSSProperties } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { EmptyState } from '../components/EmptyState';
 import { useAccounts } from '../hooks/useAccounts';
 import { useIncomeItems } from '../hooks/useIncomeItems';
 import { useFixedExpenses } from '../hooks/useFixedExpenses';
@@ -13,16 +15,20 @@ const YEARS = 6;
 
 export function Proyecciones() {
   const { month } = useMonth();
+  const navigate = useNavigate();
   const accounts = useAccounts();
   const income = useIncomeItems();
   const fixed = useFixedExpenses();
   const variableActual = useVariableActual(month);
-  const { assumptions, save } = useProjectionAssumptions();
+  const { assumptions, configured, save } = useProjectionAssumptions();
 
   const [scenario, setScenario] = useState<'conservador' | 'base' | 'optimista'>('base');
 
   const startYear = new Date(month).getFullYear();
   const currentExpense = fixed.total + variableActual.amount;
+  // Proyectar desde cero sería inventar: sin patrimonio ni ingresos cargados
+  // las tres curvas saldrían de los valores por defecto, no de tus datos.
+  const hasBasis = accounts.rows.length > 0 || income.total > 0;
 
   const base = useMemo(
     () => computeProjection(accounts.netWorth, income.total, currentExpense, assumptions, 1, startYear, YEARS),
@@ -50,6 +56,21 @@ export function Proyecciones() {
         </div>
       </div>
 
+      {!hasBasis && (
+        <EmptyState
+          title="Todavía no hay desde dónde proyectar."
+          body="Las tres curvas parten de tu patrimonio y tu ingreso de hoy. Carga al menos una cuenta con su saldo y tus ingresos del mes, y esta pantalla empieza a tener sentido."
+          actionLabel="Agregar primera cuenta"
+          onAction={() => navigate('/cuentas')}
+        />
+      )}
+
+      {!configured && hasBasis && (
+        <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-amber)' }}>
+          Los supuestos de abajo son valores por defecto de la app, no tuyos. Ajústalos para que la proyección sea tuya.
+        </span>
+      )}
+
       <div className="card" style={{ background: 'var(--color-amber-bg)', flexDirection: 'row', gap: 18, alignItems: 'flex-start' }}>
         <span style={{ font: '600 12.5px Outfit, sans-serif', color: 'var(--color-amber)', paddingTop: 2, whiteSpace: 'nowrap' }}>Fechas inciertas</span>
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', flex: 1 }}>
@@ -67,6 +88,7 @@ export function Proyecciones() {
         </span>
       </div>
 
+      {hasBasis && (
       <div className="grid-2" style={{ gridTemplateColumns: 'minmax(0,1.45fr) minmax(0,1fr)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -197,6 +219,7 @@ export function Proyecciones() {
           </span>
         </div>
       </div>
+      )}
     </div>
   );
 }
