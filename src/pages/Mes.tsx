@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useMonth } from '../contexts/MonthContext';
 import { useCierre } from '../contexts/CierreContext';
 import { useIncomeItems } from '../hooks/useIncomeItems';
@@ -10,6 +10,9 @@ import { useCapexItems } from '../hooks/useCapexItems';
 import { useMonthClose } from '../hooks/useMonthClose';
 import { EditableList } from '../components/EditableList';
 import { Chip } from '../components/Chip';
+import { MoneyInput } from '../components/MoneyInput';
+import { CategoryBars } from '../components/charts/CategoryBars';
+import { VARIABLE_CATEGORIES } from '../utils/categories';
 import { formatCLP, formatPercent, formatSignedCLP } from '../utils/money';
 import { formatMonthYear, addMonths, formatDayMonth, daysUntil } from '../utils/date';
 import { NavLink } from 'react-router-dom';
@@ -123,24 +126,60 @@ export function Mes() {
             </div>
           </Section>
 
-          <Section title="Gastos variables">
-            <div className="ledger-row" style={{ borderBottom: '1px solid var(--color-hairline-strong)' }}>
-              <span className="label">{variableBudget.label}</span>
-              <Chip kind="variable" label="TOPE" />
-              <CommitOnBlurAmount value={variableBudget.cap} onCommit={(v) => variableBudget.setCap(v)} />
-            </div>
-            <div className="hatch-variable" style={{ height: 8, width: '100%', margin: '10px 0 8px' }} />
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>Real este mes:</span>
-              <CommitOnBlurAmount value={variableActual.amount} onCommit={(v) => variableActual.setAmount(v)} />
-              {variableBudget.cap > 0 && variableActual.amount > variableBudget.cap && (
-                <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-amber)' }}>
-                  {formatCLP(variableActual.amount - variableBudget.cap)} sobre el tope
+          <Section title="Gastos variables" sub={`tope ${formatCLP(variableBudget.cap)} · real ${formatCLP(variableActual.amount)}`}>
+            <div className="ledger">
+              <div className="ledger-row" style={{ borderTop: 'none', paddingBottom: 6 }}>
+                <span className="label" style={{ font: '400 12px Outfit, sans-serif', color: 'var(--color-graphite)' }}>Categoría</span>
+                <span style={{ font: '400 12px Outfit, sans-serif', color: 'var(--color-graphite)', width: 130, textAlign: 'right' }}>Tope</span>
+                <span style={{ font: '400 12px Outfit, sans-serif', color: 'var(--color-graphite)', width: 130, textAlign: 'right' }}>Gastado</span>
+              </div>
+              {VARIABLE_CATEGORIES.map((c) => {
+                const cap = variableBudget.capOf(c.key);
+                const spent = variableActual.amountOf(c.key);
+                const over = cap > 0 && spent > cap;
+                return (
+                  <div key={c.key} className="ledger-row">
+                    <span className="label">
+                      {c.label}
+                      {over && (
+                        <span style={{ font: '400 12px Outfit, sans-serif', color: 'var(--color-amber)' }}>
+                          {' '}· {formatCLP(spent - cap)} sobre el tope
+                        </span>
+                      )}
+                    </span>
+                    <span style={{ width: 130, display: 'flex', justifyContent: 'flex-end' }}>
+                      <MoneyInput compact value={cap} onCommit={(v) => variableBudget.setCap(c.key, v)} />
+                    </span>
+                    <span style={{ width: 130, display: 'flex', justifyContent: 'flex-end' }}>
+                      <MoneyInput compact value={spent} onCommit={(v) => variableActual.setAmount(c.key, v)} />
+                    </span>
+                  </div>
+                );
+              })}
+              <div className="ledger-row ledger-subtotal">
+                <span className="label">Subtotal variables</span>
+                <span style={{ font: '500 14px Outfit, sans-serif', fontVariantNumeric: 'tabular-nums', width: 130, textAlign: 'right' }}>
+                  {formatCLP(variableBudget.cap)}
                 </span>
-              )}
+                <span style={{ font: '600 14px Outfit, sans-serif', fontVariantNumeric: 'tabular-nums', width: 130, textAlign: 'right' }}>
+                  {formatCLP(variableActual.amount)}
+                </span>
+              </div>
             </div>
-            <span style={{ font: '400 11px/1.5 Outfit, sans-serif', color: 'var(--color-graphite)' }}>
-              Un solo tope, no detalle línea por línea: con uso mensual el desglose sería inventado. Se confirma en el cierre.
+            {variableActual.amount > 0 && (
+              <div style={{ paddingTop: 16 }}>
+                <CategoryBars
+                  rows={VARIABLE_CATEGORIES.map((c) => ({
+                    key: c.key,
+                    label: c.label,
+                    spent: variableActual.amountOf(c.key),
+                    cap: variableBudget.capOf(c.key),
+                  }))}
+                />
+              </div>
+            )}
+            <span style={{ font: '400 11px/1.5 Outfit, sans-serif', color: 'var(--color-graphite)', paddingTop: 10 }}>
+              El tope es lo que te propusiste; lo gastado es lo que pasó. La marca vertical en cada barra es el tope.
             </span>
           </Section>
 
@@ -303,44 +342,6 @@ function KpiCard({ label, value, sub, highlight }: { label: string; value: strin
       <span style={{ font: '500 24px Outfit, sans-serif', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
       <span style={{ font: '400 12.5px Outfit, sans-serif', color: highlight ? 'var(--color-green)' : 'var(--color-graphite)' }}>{sub}</span>
     </div>
-  );
-}
-
-/** Writes once the field is done, not on every keystroke. */
-function CommitOnBlurAmount({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
-  const [text, setText] = useState(value ? String(value) : '');
-  const [focused, setFocused] = useState(false);
-
-  useEffect(() => {
-    if (!focused) setText(value ? String(value) : '');
-  }, [value, focused]);
-
-  function commit() {
-    setFocused(false);
-    const next = Number(text) || 0;
-    if (next !== value) onCommit(next);
-  }
-
-  return (
-    <input
-      type="number"
-      value={text}
-      placeholder="0"
-      onFocus={() => setFocused(true)}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur();
-      }}
-      style={{
-        width: 120,
-        border: '1.5px solid var(--color-hairline-input)',
-        borderRadius: 10,
-        padding: '8px 10px',
-        font: '400 13px Outfit, sans-serif',
-        textAlign: 'right',
-      }}
-    />
   );
 }
 

@@ -11,10 +11,10 @@ import { useSavingsCommitments } from '../hooks/useSavingsCommitments';
 import { useCapexItems } from '../hooks/useCapexItems';
 import { useReminders, useReminderCompletion } from '../hooks/useReminders';
 import { useGoals, requiredMonthly, progressPct } from '../hooks/useGoals';
-import { useCollection } from '../hooks/useCollection';
-import type { MonthClose } from '../types/models';
+import { useMonthCloses } from '../hooks/useMonthCloses';
 import { AreaSparkline } from '../components/charts/AreaSparkline';
-import { StackedBar, StackedBarLegend } from '../components/charts/StackedBar';
+import { DonutChart } from '../components/charts/DonutChart';
+import { flowSlices } from '../utils/flow';
 import { ProgressBar } from '../components/ProgressBar';
 import { EmptyState } from '../components/EmptyState';
 import { formatCLP, formatPercent, formatSignedCLP } from '../utils/money';
@@ -38,7 +38,7 @@ export function Inicio() {
   const reminder = reminders.rows[0];
   const completion = useReminderCompletion(reminder?.id, month);
   const goals = useGoals();
-  const closedMonths = useCollection<MonthClose>('month_closes', [{ column: 'status', value: 'closed' }]);
+  const closedMonths = useMonthCloses();
 
   const displayName = capitalize(user?.email?.split('@')[0] ?? 'ahí');
 
@@ -73,7 +73,7 @@ export function Inicio() {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: '100%', padding: '22px 0 26px', textAlign: 'center' }}>
         <h1 style={{ font: 'var(--fs-hero)', letterSpacing: '-0.025em' }}>Hola, {displayName}</h1>
         <span style={{ font: '400 17px Outfit, sans-serif', color: 'var(--color-graphite)' }}>
-          Llevas {closedMonths.rows.length} {closedMonths.rows.length === 1 ? 'mes' : 'meses'} cerrando tus números
+          Llevas {closedMonths.closed.length} {closedMonths.closed.length === 1 ? 'mes' : 'meses'} cerrando tus números
         </span>
         {isCurrentMonth && (
           <span
@@ -160,23 +160,16 @@ export function Inicio() {
               <Stat label="Sale" value={formatCLP(gastos)} big />
               <Stat label="Queda" value={formatCLP(libre)} big color="var(--color-green)" />
             </div>
-            <StackedBar
-              segments={[
-                { pct: pct(fixed.total, income.total), color: '#0F4CD9' },
-                { pct: pct(variableActual.amount, income.total), color: 'hatch' },
-                { pct: pct(savings.total, income.total), color: 'var(--color-green)' },
-                { pct: pct(capex.total, income.total), color: 'var(--color-amber)' },
-                { pct: Math.max(100 - pct(gastos + savings.total + capex.total, income.total), 0), color: 'var(--color-hairline)' },
-              ]}
-            />
-            <StackedBarLegend
-              items={[
-                { color: '#0F4CD9', label: 'fijos' },
-                { color: 'hatch', label: 'variables' },
-                { color: 'var(--color-green)', label: 'ahorro' },
-                { color: 'var(--color-amber)', label: 'capex' },
-                { color: 'var(--color-hairline)', label: 'libre' },
-              ]}
+            <DonutChart
+              slices={flowSlices({
+                income: income.total,
+                fixed: fixed.total,
+                variable: variableActual.amount,
+                savings: savings.total,
+                capex: capex.total,
+              })}
+              centerLabel="de tu ingreso"
+              size={200}
             />
           </div>
 
@@ -356,11 +349,6 @@ function Stat({ label, value, color, big }: { label: string; value: string; colo
       </span>
     </div>
   );
-}
-
-function pct(part: number, total: number) {
-  if (!total) return 0;
-  return Math.max(Math.min((part / total) * 100, 100), 0);
 }
 
 function capitalize(s: string) {

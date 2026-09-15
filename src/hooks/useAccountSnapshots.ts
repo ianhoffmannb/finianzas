@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { AccountBalanceSnapshot } from '../types/models';
+import { FIRST_MONTH } from '../utils/date';
 
 /** Net worth per month, summed across accounts (debt already negative), last N months. */
 export function useNetWorthHistory(months = 6) {
@@ -21,6 +22,7 @@ export function useNetWorthHistory(months = 6) {
 
     const byMonth = new Map<string, number>();
     for (const row of data ?? []) {
+      if (row.month < FIRST_MONTH) continue;
       byMonth.set(row.month, (byMonth.get(row.month) ?? 0) + row.balance_clp);
     }
     const sorted = [...byMonth.entries()].map(([month, total]) => ({ month, total }));

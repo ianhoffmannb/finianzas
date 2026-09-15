@@ -61,6 +61,7 @@ export interface VariableBudget {
   id: string;
   user_id: string;
   label: string;
+  category: string;
   monthly_cap: number;
   active: boolean;
 }
@@ -87,6 +88,7 @@ export interface VariableActual {
   id: string;
   user_id: string;
   month: string;
+  category: string;
   amount: number;
 }
 
@@ -138,6 +140,7 @@ export interface Goal {
   monthly_contribution: number;
   recurs_yearly: boolean;
   active: boolean;
+  completed_at: string | null;
   sort_order: number;
   created_at: string;
 }
@@ -181,5 +184,20 @@ export interface HouseholdExpense {
   amount: number;
   category: HouseholdCategory;
   receipt_path: string | null;
+  created_at: string;
+}
+
+export type PlannedFlowKind = 'ingreso' | 'gasto';
+export type PlannedFlowStatus = 'pendiente' | 'confirmado' | 'cancelado';
+
+export interface PlannedFlow {
+  id: string;
+  user_id: string;
+  kind: PlannedFlowKind;
+  label: string;
+  amount: number;
+  month: string;
+  status: PlannedFlowStatus;
+  notes: string | null;
   created_at: string;
 }

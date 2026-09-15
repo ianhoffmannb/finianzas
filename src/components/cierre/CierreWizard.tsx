@@ -13,6 +13,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { formatCLP, formatSignedCLP, formatUSD } from '../../utils/money';
 import { formatMonthYear, currentMonthKey } from '../../utils/date';
 import { MoneyInput } from '../MoneyInput';
+import { VARIABLE_CATEGORIES } from '../../utils/categories';
 
 const STEP_TITLES = ['Ingresos del mes', 'Saldos al cierre', 'Aportes a metas', 'Resumen y confirmación'];
 
@@ -40,17 +41,32 @@ export function CierreWizard({ onClose }: { onClose: () => void }) {
   const [incomeAmounts, setIncomeAmounts] = useState<Record<string, number>>({});
   const [accountBalances, setAccountBalances] = useState<Record<string, number>>({});
   const [usdRateEdit, setUsdRateEdit] = useState<number | null>(null);
-  const [variableRealEdit, setVariableRealEdit] = useState<number | null>(null);
+  const [variableEdits, setVariableEdits] = useState<Record<string, number>>({});
   const [goalContribs, setGoalContribs] = useState<Record<string, number>>({});
 
   const usdRate = usdRateEdit ?? accounts.rows.find((a) => a.currency === 'USD')?.fx_rate ?? 0;
-  const variableReal = variableRealEdit ?? variableActual.amount ?? 0;
+  function variableOf(category: string) {
+    return variableEdits[category] ?? variableActual.amountOf(category);
+  }
+  const variableReal = VARIABLE_CATEGORIES.reduce((a, c) => a + variableOf(c.key), 0);
+
+  /**
+   * El ahorro comprometido se suma solo al saldo de su cuenta destino: llega
+   * prellenado para que no tengas que sumarlo a mano, y aun así lo puedes
+   * corregir si el saldo real no calzó.
+   */
+  function suggestedBalance(accountId: string, current: number) {
+    const committed = savings.rows
+      .filter((sv) => sv.account_id === accountId)
+      .reduce((acc, sv) => acc + sv.amount, 0);
+    return current + committed;
+  }
 
   function incomeAmount(id: string, fallback: number) {
     return incomeAmounts[id] ?? fallback;
   }
   function accountBalance(id: string, fallback: number) {
-    return accountBalances[id] ?? fallback;
+    return accountBalances[id] ?? suggestedBalance(id, fallback);
   }
   function goalContrib(id: string, fallback: number) {
     return goalContribs[id] ?? fallback;
@@ -97,8 +113,11 @@ export function CierreWizard({ onClose }: { onClose: () => void }) {
         if (amt !== it.amount) await income.update(it.id, { amount: amt } as never);
       }
 
-      // 3. variable actual
-      await variableActual.setAmount(variableReal);
+      // 3. gasto variable real, categoría por categoría
+      for (const c of VARIABLE_CATEGORIES) {
+        const value = variableOf(c.key);
+        if (value !== variableActual.amountOf(c.key)) await variableActual.setAmount(c.key, value);
+      }
 
       // 4. goal contributions — apply only the delta against what this month
       // already contributed, so re-closing a month doesn't double-count.
@@ -129,7 +148,7 @@ export function CierreWizard({ onClose }: { onClose: () => void }) {
         savings_actual: savings.total,
         capex_actual: capex.total,
         net_worth_result: netWorthResult,
-        step_data: { incomeAmounts, accountBalances, usdRate, variableReal, goalContribs },
+        step_data: { incomeAmounts, accountBalances, usdRate, variableReal, variableEdits, goalContribs },
       });
 
       setDone(true);
@@ -207,6 +226,7 @@ export function CierreWizard({ onClose }: { onClose: () => void }) {
                   {accounts.rows.map((a) => {
                     const bal = accountBalance(a.id, a.current_balance);
                     const clp = a.currency === 'USD' ? bal * usdRate : bal;
+                    const committed = savings.rows.filter((sv) => sv.account_id === a.id).reduce((acc, sv) => acc + sv.amount, 0);
                     return (
                       <div key={a.id} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -216,17 +236,36 @@ export function CierreWizard({ onClose }: { onClose: () => void }) {
                           </span>
                         </div>
                         <MoneyInput value={bal} onChange={(v) => setAccountBalances((s) => ({ ...s, [a.id]: v }))} prefix={a.currency === 'USD' ? 'US$' : '$'} />
+                        {committed > 0 && accountBalances[a.id] === undefined && (
+                          <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-green)' }}>
+                            incluye {formatCLP(committed)} de ahorro comprometido
+                          </span>
+                        )}
                         {a.currency === 'USD' && <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>= {formatCLP(clp)}</span>}
                       </div>
                     );
                   })}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--color-hairline)', paddingTop: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <span style={{ font: '500 13px Outfit, sans-serif' }}>Variables reales del mes</span>
-                      <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>presupuesto {formatCLP(variableBudget.budget?.monthly_cap ?? 0)}</span>
+                      <span style={{ font: '500 13px Outfit, sans-serif' }}>Gasto variable real del mes</span>
+                      <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>
+                        tope {formatCLP(variableBudget.cap)} · total {formatCLP(variableReal)}
+                      </span>
                     </div>
-                    <MoneyInput value={variableReal} onChange={setVariableRealEdit} suffix="CLP" />
-                    <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>Un solo número. Sin desglose.</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
+                      {VARIABLE_CATEGORIES.map((c) => (
+                        <label key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          <span style={{ font: '400 12px Outfit, sans-serif', color: 'var(--color-graphite)' }}>
+                            {c.label}
+                            {variableBudget.capOf(c.key) > 0 && ` · tope ${formatCLP(variableBudget.capOf(c.key))}`}
+                          </span>
+                          <MoneyInput
+                            value={variableOf(c.key)}
+                            onChange={(v) => setVariableEdits((prev) => ({ ...prev, [c.key]: v }))}
+                          />
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}

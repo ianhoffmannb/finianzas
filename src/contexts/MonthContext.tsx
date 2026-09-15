@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import { addMonths, currentMonthKey } from '../utils/date';
+import { FIRST_MONTH, addMonths, currentMonthKey } from '../utils/date';
 
 interface MonthContextValue {
   month: string; // yyyy-mm-01
   isCurrentMonth: boolean;
+  isFirstMonth: boolean;
   goPrevMonth: () => void;
   goNextMonth: () => void;
   goToCurrentMonth: () => void;
@@ -12,7 +13,7 @@ interface MonthContextValue {
 const MonthContext = createContext<MonthContextValue | undefined>(undefined);
 
 export function MonthProvider({ children }: { children: ReactNode }) {
-  const real = currentMonthKey();
+  const real = currentMonthKey() < FIRST_MONTH ? FIRST_MONTH : currentMonthKey();
   const [month, setMonth] = useState(real);
 
   return (
@@ -20,7 +21,8 @@ export function MonthProvider({ children }: { children: ReactNode }) {
       value={{
         month,
         isCurrentMonth: month === real,
-        goPrevMonth: () => setMonth((m) => addMonths(m, -1)),
+        isFirstMonth: month === FIRST_MONTH,
+        goPrevMonth: () => setMonth((m) => (addMonths(m, -1) < FIRST_MONTH ? m : addMonths(m, -1))),
         goNextMonth: () => setMonth((m) => (m === real ? m : addMonths(m, 1))),
         goToCurrentMonth: () => setMonth(real),
       }}

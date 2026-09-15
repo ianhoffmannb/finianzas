@@ -24,7 +24,7 @@ const HORIZON_LABEL: Record<GoalHorizon, string> = {
   recurrente: 'Recurrente',
 };
 
-type Draft = Omit<Goal, 'id' | 'user_id' | 'created_at' | 'sort_order' | 'active' | 'current_amount'> & {
+type Draft = Omit<Goal, 'id' | 'user_id' | 'created_at' | 'sort_order' | 'active' | 'completed_at' | 'current_amount'> & {
   current_amount: number;
 };
 
@@ -58,7 +58,7 @@ export function Metas() {
   const libre = income.total - fixed.total - variableActual.amount - savings.total - capex.total;
   const gap = Math.max(goals.monthlyRequired - libre, 0);
 
-  const selected = goals.rows.find((g) => g.id === selectedId) ?? goals.rows[0] ?? null;
+  const selected = goals.rows.find((g) => g.id === selectedId) ?? goals.open[0] ?? null;
   const contributions = useGoalContributions(selected?.id ?? '');
 
   function openCreate() {
@@ -112,7 +112,7 @@ export function Metas() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <h1>Metas</h1>
           <span className="page-sub">
-            {goals.rows.length} metas activas · {formatCLP(goals.monthlyRequired)}/mes para cumplirlas todas
+            {goals.open.length} {goals.open.length === 1 ? 'meta activa' : 'metas activas'} · {formatCLP(goals.monthlyRequired)}/mes para cumplirlas todas{goals.completed.length > 0 && ` · ${goals.completed.length} cumplidas`}
           </span>
         </div>
         <button className="btn btn-primary" onClick={openCreate}>
@@ -120,7 +120,7 @@ export function Metas() {
         </button>
       </div>
 
-      {goals.rows.length > 0 && (
+      {goals.open.length > 0 && (
         <div className="card" style={{ background: 'var(--color-amber-bg)', flexDirection: 'row', alignItems: 'center', gap: 28, flexWrap: 'wrap' }}>
           <MiniStat label="Requerido / mes" value={formatCLP(goals.monthlyRequired)} />
           <MiniStat label="Disponible hoy" value={formatCLP(libre)} />
@@ -158,11 +158,38 @@ export function Metas() {
                 <div key={h} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <span style={{ font: '600 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>{HORIZON_LABEL[h]}</span>
                   {items.map((g) => (
-                    <GoalCard key={g.id} goal={g} selected={g.id === selected?.id} onClick={() => setSelectedId(g.id)} onEdit={() => openEdit(g)} />
+                    <GoalCard
+                      key={g.id}
+                      goal={g}
+                      selected={g.id === selected?.id}
+                      onClick={() => setSelectedId(g.id)}
+                      onEdit={() => openEdit(g)}
+                      onComplete={() => goals.complete(g)}
+                      onReopen={() => goals.reopen(g)}
+                      onDelete={() => goals.remove(g.id)}
+                    />
                   ))}
                 </div>
               );
             })}
+
+            {goals.completed.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={{ font: '600 12.5px Outfit, sans-serif', color: 'var(--color-green)' }}>Cumplidas</span>
+                {goals.completed.map((g) => (
+                  <GoalCard
+                    key={g.id}
+                    goal={g}
+                    selected={g.id === selected?.id}
+                    onClick={() => setSelectedId(g.id)}
+                    onEdit={() => openEdit(g)}
+                    onComplete={() => goals.complete(g)}
+                    onReopen={() => goals.reopen(g)}
+                    onDelete={() => goals.remove(g.id)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           {selected && (
@@ -229,7 +256,7 @@ export function Metas() {
   );
 }
 
-function GoalCard({ goal, selected, onClick, onEdit }: { goal: Goal; selected: boolean; onClick: () => void; onEdit: () => void }) {
+function GoalCard({ goal, selected, onClick, onEdit, onComplete, onReopen, onDelete }: { goal: Goal; selected: boolean; onClick: () => void; onEdit: () => void; onComplete: () => void; onReopen: () => void; onDelete: () => void }) {
   return (
     <div
       onClick={onClick}
@@ -245,7 +272,10 @@ function GoalCard({ goal, selected, onClick, onEdit }: { goal: Goal; selected: b
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 14 }}>
-        <span style={{ font: '600 15px Outfit, sans-serif' }}>{goal.name}</span>
+        <span style={{ font: '600 15px Outfit, sans-serif' }}>
+          {goal.name}
+          {goal.completed_at && <span style={{ font: '500 12px Outfit, sans-serif', color: 'var(--color-green)' }}> · cumplida</span>}
+        </span>
         <Chip kind={goal.assumes_future_salary ? 'supone' : goal.category === 'de_vida' ? 'devida' : 'fijo'} label={goal.assumes_future_salary ? undefined : goal.category === 'de_vida' ? undefined : 'FINANCIERA'} />
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -261,19 +291,35 @@ function GoalCard({ goal, selected, onClick, onEdit }: { goal: Goal; selected: b
         <span>{goal.target_date ? formatMonthYear(goal.target_date) : 'sin fecha'}</span>
         <span>requiere {formatCLP(requiredMonthly(goal))}/mes</span>
       </div>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onEdit();
-        }}
-        className="btn btn-ghost"
-        style={{ alignSelf: 'flex-start', padding: '6px 12px', fontSize: 11.5 }}
-      >
-        Editar
-      </button>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="btn btn-ghost" style={cardBtn}>
+          Editar
+        </button>
+        {goal.completed_at ? (
+          <button onClick={(e) => { e.stopPropagation(); onReopen(); }} className="btn btn-ghost" style={cardBtn}>
+            Reabrir
+          </button>
+        ) : (
+          <button onClick={(e) => { e.stopPropagation(); onComplete(); }} className="btn btn-ghost" style={{ ...cardBtn, color: 'var(--color-green)', borderColor: 'var(--color-green-soft)' }}>
+            Meta cumplida
+          </button>
+        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (confirm(`¿Eliminar la meta "${goal.name}"? No se puede deshacer.`)) onDelete();
+          }}
+          className="btn btn-ghost"
+          style={{ ...cardBtn, color: 'var(--color-red)', borderColor: 'var(--color-red-soft)' }}
+        >
+          Eliminar meta
+        </button>
+      </div>
     </div>
   );
 }
+
+const cardBtn = { alignSelf: 'flex-start', padding: '6px 12px', fontSize: 11.5 };
 
 function MiniStat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (

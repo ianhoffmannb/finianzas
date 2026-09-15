@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMonth } from '../contexts/MonthContext';
 import { useHousehold } from '../hooks/useHousehold';
 import { EditableList } from '../components/EditableList';
+import { MoneyInput } from '../components/MoneyInput';
 import { ReceiptDropzone } from '../components/ReceiptDropzone';
 import { formatCLP } from '../utils/money';
 import { formatMonthYear, addMonths, formatDayMonth } from '../utils/date';
@@ -168,7 +169,7 @@ function IncomeQuickEdit({ month, amount, receivedOn, onSave }: { month: string;
     <div style={{ border: '1px dashed var(--hogar-border)', padding: '16px 20px', display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
       <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <span style={{ font: '400 12px Outfit, sans-serif', color: 'var(--hogar-muted-2)' }}>Monto recibido este mes</span>
-        <input type="number" value={a} onChange={(e) => setA(Number(e.target.value))} style={hogarInput} />
+        <MoneyInput value={a} onChange={setA} />
       </label>
       <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <span style={{ font: '400 12px Outfit, sans-serif', color: 'var(--hogar-muted-2)' }}>Fecha</span>

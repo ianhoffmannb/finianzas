@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { MonthClose } from '../types/models';
+import { isBeforeFirstMonth } from '../utils/date';
 
 export function useMonthClose(month: string) {
   const { user } = useAuth();
@@ -10,6 +11,12 @@ export function useMonthClose(month: string) {
 
   const refetch = useCallback(async () => {
     if (!user) return;
+    // Antes de septiembre 2026 no hay historia que traer.
+    if (isBeforeFirstMonth(month)) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const { data: row } = await supabase
       .from('month_closes')

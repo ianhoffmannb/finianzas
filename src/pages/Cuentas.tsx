@@ -1,4 +1,7 @@
+import { useState } from 'react';
+import { MoneyInput } from '../components/MoneyInput';
 import { useAccounts } from '../hooks/useAccounts';
+import { useSavingsAccrual } from '../hooks/useSavingsAccrual';
 import { EmptyState } from '../components/EmptyState';
 import { Chip } from '../components/Chip';
 import { StackedBar } from '../components/charts/StackedBar';
@@ -11,6 +14,7 @@ const TYPE_COLOR: Record<AccountType, string> = { liquido: '#0F4CD9', invertido:
 
 export function Cuentas() {
   const accounts = useAccounts();
+  const accrual = useSavingsAccrual();
   const total = accounts.totalLiquido + accounts.totalInvertido;
   const liquidoPct = total ? (accounts.totalLiquido / total) * 100 : 0;
   const invertidoPct = total ? (accounts.totalInvertido / total) * 100 : 0;
@@ -49,6 +53,13 @@ export function Cuentas() {
             <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>{invertidoPct.toFixed(0)}% del patrimonio</span>
           </div>
           <div className="card" style={{ padding: '20px 22px', gap: 6 }}>
+            <span className="card-label" style={{ color: 'var(--color-green)' }}>Ahorro acumulado</span>
+            <span className="card-figure" style={{ color: 'var(--color-green)' }}>{formatCLP(accrual.total)}</span>
+            <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>
+              {formatCLP(accrual.closed)} cerrado + {formatCLP(accrual.currentCommitment)} de este mes
+            </span>
+          </div>
+          <div className="card" style={{ padding: '20px 22px', gap: 6 }}>
             <span className="card-label" style={{ color: accounts.totalDeuda > 0 ? 'var(--color-red)' : 'var(--color-green)' }}>Deuda</span>
             <span className="card-figure" style={{ color: accounts.totalDeuda > 0 ? 'var(--color-red)' : 'var(--color-green)' }}>{formatCLP(accounts.totalDeuda)}</span>
             <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>{accounts.totalDeuda > 0 ? 'comprometido a futuro' : 'nada comprometido a futuro'}</span>
@@ -64,7 +75,13 @@ export function Cuentas() {
               <div key={type} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <span style={{ font: '600 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>{TYPE_LABEL[type]}</span>
                 {items.map((a) => (
-                  <AccountRow key={a.id} account={a} onDelete={() => accounts.remove(a.id)} onSave={(patch) => accounts.update(a.id, patch)} />
+                  <AccountRow
+                    key={a.id}
+                    account={a}
+                    committed={accrual.committedTo(a.id)}
+                    onDelete={() => accounts.remove(a.id)}
+                    onSave={(patch) => accounts.update(a.id, patch)}
+                  />
                 ))}
                 {items.length === 0 && type === 'deuda' && (
                   <div className="card" style={{ background: 'var(--color-green-bg)', padding: '34px 30px', alignItems: 'flex-start' }}>
@@ -118,7 +135,7 @@ export function Cuentas() {
   );
 }
 
-function AccountRow({ account, onDelete, onSave }: { account: Account; onDelete: () => void; onSave: (patch: Partial<Account>) => void }) {
+function AccountRow({ account, committed, onDelete, onSave }: { account: Account; committed: number; onDelete: () => void; onSave: (patch: Partial<Account>) => void }) {
   return (
     <div className="card" style={{ padding: '18px 22px', flexDirection: 'row', alignItems: 'center', gap: 18 }}>
       <span style={{ width: 10, height: 10, background: TYPE_COLOR[account.type], flex: '0 0 10px' }} />
@@ -127,6 +144,11 @@ function AccountRow({ account, onDelete, onSave }: { account: Account; onDelete:
         <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>
           {account.currency === 'USD' ? `${formatUSD(account.current_balance)}` : account.notes ?? ''}
         </span>
+        {committed > 0 && (
+          <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-green)' }}>
+            +{formatCLP(committed)} al mes · se suma solo al cerrar
+          </span>
+        )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
         <span style={{ font: '500 17px Outfit, sans-serif', fontVariantNumeric: 'tabular-nums' }}>{formatCLP(balanceInClp(account))}</span>
@@ -145,23 +167,27 @@ function QuickEdit({ account, onSave, onDelete }: { account: Account; onSave: (p
       <summary className="btn btn-ghost" style={{ padding: '9px 15px', listStyle: 'none', display: 'inline-block' }}>
         Editar
       </summary>
-      <div style={{ position: 'absolute', marginTop: 8, background: '#fff', border: '1px solid var(--color-hairline)', borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 8, boxShadow: '0 18px 44px #0F172914', zIndex: 5 }}>
+      <div style={{ position: 'absolute', marginTop: 8, background: 'var(--color-bg)', border: '1px solid var(--color-hairline)', borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10, boxShadow: '0 18px 44px #0F172914', zIndex: 5 }}>
         <label style={smallLabel}>
           Saldo
-          <input
-            type="number"
-            defaultValue={account.current_balance}
-            onBlur={(e) => onSave({ current_balance: Number(e.target.value) })}
-            style={smallInput}
+          <MoneyInput
+            value={account.current_balance}
+            prefix={account.currency === 'USD' ? 'US$' : '$'}
+            onCommit={(v) => onSave({ current_balance: v })}
           />
         </label>
         {account.currency === 'USD' && (
           <label style={smallLabel}>
             Dólar observado
-            <input type="number" defaultValue={account.fx_rate ?? 0} onBlur={(e) => onSave({ fx_rate: Number(e.target.value) })} style={smallInput} />
+            <MoneyInput value={account.fx_rate ?? 0} onCommit={(v) => onSave({ fx_rate: v })} />
           </label>
         )}
-        <button onClick={onDelete} style={{ font: '400 12px Outfit, sans-serif', color: 'var(--color-red)', background: 'transparent', border: 0, cursor: 'pointer', textAlign: 'left' }}>
+        <button
+          onClick={() => {
+            if (confirm(`¿Eliminar la cuenta "${account.name}"? Se borra también su historial de saldos.`)) onDelete();
+          }}
+          style={{ font: '400 12px Outfit, sans-serif', color: 'var(--color-red)', background: 'transparent', border: 0, cursor: 'pointer', textAlign: 'left' }}
+        >
           Eliminar cuenta
         </button>
       </div>
@@ -179,29 +205,35 @@ function AddAccountForm({ onCreate }: { onCreate: (d: Record<string, unknown>) =
 }
 
 function AddAccountFields({ onCreate }: { onCreate: (d: Record<string, unknown>) => void }) {
+  const [name, setName] = useState('');
+  const [type, setType] = useState<AccountType>('liquido');
+  const [currency, setCurrency] = useState<Currency>('CLP');
+  const [balance, setBalance] = useState(0);
+  const [fxRate, setFxRate] = useState(0);
+
+  function submit() {
+    if (!name.trim()) return;
+    onCreate({
+      name: name.trim(),
+      type,
+      currency,
+      current_balance: balance,
+      fx_rate: currency === 'USD' ? fxRate || null : null,
+    });
+    setName('');
+    setBalance(0);
+    setFxRate(0);
+  }
+
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const form = new FormData(e.currentTarget);
-        onCreate({
-          name: form.get('name'),
-          type: form.get('type') as AccountType,
-          currency: form.get('currency') as Currency,
-          current_balance: Number(form.get('current_balance')) || 0,
-          fx_rate: Number(form.get('fx_rate')) || null,
-        });
-        e.currentTarget.reset();
-      }}
-      style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12, alignItems: 'flex-end' }}
-    >
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12, alignItems: 'flex-end' }}>
       <label style={smallLabel}>
         Nombre
-        <input name="name" required style={smallInput} />
+        <input value={name} onChange={(e) => setName(e.target.value)} style={smallInput} />
       </label>
       <label style={smallLabel}>
         Tipo
-        <select name="type" style={smallInput}>
+        <select value={type} onChange={(e) => setType(e.target.value as AccountType)} style={smallInput}>
           <option value="liquido">Líquido</option>
           <option value="invertido">Invertido</option>
           <option value="deuda">Deuda</option>
@@ -209,23 +241,25 @@ function AddAccountFields({ onCreate }: { onCreate: (d: Record<string, unknown>)
       </label>
       <label style={smallLabel}>
         Moneda
-        <select name="currency" style={smallInput}>
+        <select value={currency} onChange={(e) => setCurrency(e.target.value as Currency)} style={smallInput}>
           <option value="CLP">CLP</option>
           <option value="USD">USD</option>
         </select>
       </label>
       <label style={smallLabel}>
         Saldo
-        <input name="current_balance" type="number" style={smallInput} />
+        <MoneyInput value={balance} onChange={setBalance} prefix={currency === 'USD' ? 'US$' : '$'} />
       </label>
-      <label style={smallLabel}>
-        Dólar (si aplica)
-        <input name="fx_rate" type="number" style={smallInput} />
-      </label>
-      <button type="submit" className="btn btn-primary" style={{ padding: '10px 16px' }}>
+      {currency === 'USD' && (
+        <label style={smallLabel}>
+          Dólar observado
+          <MoneyInput value={fxRate} onChange={setFxRate} />
+        </label>
+      )}
+      <button type="button" onClick={submit} className="btn btn-primary" style={{ padding: '10px 16px' }}>
         Guardar
       </button>
-    </form>
+    </div>
   );
 }
 

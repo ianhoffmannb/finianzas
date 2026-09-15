@@ -1,16 +1,34 @@
+import { useMemo } from 'react';
 import { useCollection } from './useCollection';
 import type { VariableBudget } from '../types/models';
+import { VARIABLE_CATEGORIES, variableCategoryLabel } from '../utils/categories';
 
-const DEFAULT_LABEL = 'Café, salidas, Uber, panoramas';
-
+/** Tope mensual por subcategoría de gasto variable. */
 export function useVariableBudget() {
   const col = useCollection<VariableBudget>('variable_budgets', [{ column: 'active', value: true }]);
-  const budget = col.rows[0] ?? null;
 
-  async function setCap(monthly_cap: number, label?: string) {
-    if (budget) return col.update(budget.id, { monthly_cap, label: label ?? budget.label } as never);
-    return col.insert({ monthly_cap, label: label ?? DEFAULT_LABEL, active: true } as never);
+  const byCategory = useMemo(() => {
+    const map = new Map<string, VariableBudget>();
+    for (const row of col.rows) map.set(row.category, row);
+    return map;
+  }, [col.rows]);
+
+  const cap = useMemo(() => col.rows.reduce((a, r) => a + r.monthly_cap, 0), [col.rows]);
+
+  function capOf(category: string) {
+    return byCategory.get(category)?.monthly_cap ?? 0;
   }
 
-  return { ...col, budget, cap: budget?.monthly_cap ?? 0, label: budget?.label ?? DEFAULT_LABEL, setCap };
+  async function setCap(category: string, monthly_cap: number) {
+    const existing = byCategory.get(category);
+    if (existing) return col.update(existing.id, { monthly_cap } as never);
+    return col.insert({
+      category,
+      monthly_cap,
+      label: variableCategoryLabel(category),
+      active: true,
+    } as never);
+  }
+
+  return { ...col, byCategory, cap, capOf, setCap, categories: VARIABLE_CATEGORIES };
 }

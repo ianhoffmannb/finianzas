@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { useMonth } from '../contexts/MonthContext';
 import { useAccounts } from '../hooks/useAccounts';
 import { useIncomeItems } from '../hooks/useIncomeItems';
@@ -7,6 +7,10 @@ import { useVariableActual } from '../hooks/useVariableActual';
 import { useSavingsCommitments } from '../hooks/useSavingsCommitments';
 import { useCapexItems } from '../hooks/useCapexItems';
 import { useMonthClose } from '../hooks/useMonthClose';
+import { useMonthCloses, totalsOf, sumTotals } from '../hooks/useMonthCloses';
+import { useSavingsAccrual } from '../hooks/useSavingsAccrual';
+import { MonthlyReport } from '../components/report/MonthlyReport';
+import { monthsFromStart } from '../utils/date';
 import { useNetWorthHistory } from '../hooks/useAccountSnapshots';
 import { balanceInClp } from '../utils/accounts';
 import { formatCLP, formatStatement, formatSignedCLP } from '../utils/money';
@@ -24,6 +28,28 @@ export function Estados() {
   const capex = useCapexItems(month);
   const prevClose = useMonthClose(prevMonth);
   const history = useNetWorthHistory(6);
+  const closes = useMonthCloses();
+  const accrual = useSavingsAccrual();
+  const [view, setView] = useState<'mensual' | 'anual'>('mensual');
+  const [reportOpen, setReportOpen] = useState(false);
+
+  const year = Number(month.slice(0, 4));
+  // El mes en curso todavía no tiene cierre: entra con los datos vivos.
+  const liveTotals = {
+    income: income.total,
+    fixed: fixed.total,
+    variable: variableActual.amount,
+    savings: savings.total,
+    capex: capex.total,
+    fcl: income.total - fixed.total - variableActual.amount - savings.total - capex.total,
+  };
+  const yearRows = monthsFromStart(month)
+    .filter((m) => Number(m.slice(0, 4)) === year)
+    .map((m) => {
+      const close = closes.byMonth.get(m);
+      return { month: m, closed: !!close, totals: close ? totalsOf(close) : m === month ? liveTotals : null };
+    });
+  const yearTotal = sumTotals(yearRows.map((r) => r.totals).filter(Boolean) as ReturnType<typeof totalsOf>[]);
 
   const operResult = income.total - fixed.total - variableActual.amount;
   const fcl = operResult - capex.total - savings.total;
@@ -35,10 +61,39 @@ export function Estados() {
       <div className="page-head">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <h1>Estados financieros</h1>
-          <span className="page-sub">{formatMonthYear(month)} · cifras en pesos chilenos</span>
+          <span className="page-sub">
+            {view === 'mensual' ? formatMonthYear(month) : `año ${year}`} · cifras en pesos chilenos
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', border: '1px solid var(--color-border-soft)', background: 'var(--color-surface)', borderRadius: 99, overflow: 'hidden' }}>
+            {(['mensual', 'anual'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                style={{
+                  font: `${view === v ? 500 : 400} 13px Outfit, sans-serif`,
+                  padding: '10px 18px',
+                  background: view === v ? 'var(--color-ink)' : 'transparent',
+                  color: view === v ? '#FFFFFF' : 'var(--color-graphite)',
+                  border: 0,
+                  cursor: 'pointer',
+                  textTransform: 'capitalize',
+                }}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          <button className="btn btn-ghost" onClick={() => setReportOpen(true)}>
+            Exportar reporte
+          </button>
         </div>
       </div>
 
+      {reportOpen && <MonthlyReport month={month} onClose={() => setReportOpen(false)} />}
+
+      {view === 'mensual' && (
       <div className="grid-2">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ font: 'var(--fs-section)', paddingBottom: 14 }}>Estado de resultados</span>
@@ -183,9 +238,84 @@ export function Estados() {
           </div>
         </div>
       </div>
+      )}
+
+      {view === 'anual' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={{ font: 'var(--fs-section)' }}>Resultado del año {year}</span>
+            <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>
+              {yearRows.filter((r) => r.closed).length} meses cerrados
+            </span>
+          </div>
+          <div className="table-scroll">
+            <div className="ledger" style={{ minWidth: 640 }}>
+              <div className="ledger-row" style={{ borderTop: 'none', borderBottom: '1px solid var(--color-hairline-strong)' }}>
+                <span style={{ font: '600 12.5px Outfit, sans-serif', color: 'var(--color-graphite)', flex: 1 }}>Mes</span>
+                <span style={yearHead}>Ingresos</span>
+                <span style={yearHead}>Gastos</span>
+                <span style={yearHead}>Ahorro</span>
+                <span style={yearHead}>Capex</span>
+                <span style={yearHead}>FCL</span>
+              </div>
+              {yearRows.map((row) => (
+                <div className="ledger-row" key={row.month}>
+                  <span className="label">
+                    {formatMonthYear(row.month)}
+                    {!row.closed && (
+                      <span style={{ font: '400 12px Outfit, sans-serif', color: 'var(--color-amber)' }}>
+                        {row.totals ? ' · en curso' : ' · sin cerrar'}
+                      </span>
+                    )}
+                  </span>
+                  <span style={yearCell}>{row.totals ? formatStatement(row.totals.income) : '—'}</span>
+                  <span style={yearCell}>{row.totals ? formatStatement(-(row.totals.fixed + row.totals.variable)) : '—'}</span>
+                  <span style={yearCell}>{row.totals ? formatStatement(-row.totals.savings) : '—'}</span>
+                  <span style={yearCell}>{row.totals ? formatStatement(-row.totals.capex) : '—'}</span>
+                  <span style={{ ...yearCell, fontWeight: 500 }}>{row.totals ? formatStatement(row.totals.fcl) : '—'}</span>
+                </div>
+              ))}
+              <div className="ledger-row ledger-total">
+                <span className="label">Acumulado {year}</span>
+                <span style={yearCell}>{formatStatement(yearTotal.income)}</span>
+                <span style={yearCell}>{formatStatement(-(yearTotal.fixed + yearTotal.variable))}</span>
+                <span style={yearCell}>{formatStatement(-yearTotal.savings)}</span>
+                <span style={yearCell}>{formatStatement(-yearTotal.capex)}</span>
+                <span style={{ ...yearCell, fontWeight: 600 }}>{formatStatement(yearTotal.fcl)}</span>
+              </div>
+            </div>
+          </div>
+          <span style={{ font: '400 11px/1.6 Outfit, sans-serif', color: 'var(--color-graphite)' }}>
+            Los meses cerrados vienen de su cierre; el mes en curso se calcula con lo que llevas cargado y por eso puede moverse.
+          </span>
+        </div>
+      )}
+
+      <div className="card" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 28, alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <span className="card-label" style={{ color: 'var(--color-green)' }}>Ahorro acumulado</span>
+          <span style={{ font: '600 22px Outfit, sans-serif', fontVariantNumeric: 'tabular-nums', color: 'var(--color-green)' }}>
+            {formatCLP(accrual.total)}
+          </span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>Cerrado</span>
+          <span style={{ font: '500 16px Outfit, sans-serif', fontVariantNumeric: 'tabular-nums' }}>{formatCLP(accrual.closed)}</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <span style={{ font: '400 12.5px Outfit, sans-serif', color: 'var(--color-graphite)' }}>Comprometido este mes</span>
+          <span style={{ font: '500 16px Outfit, sans-serif', fontVariantNumeric: 'tabular-nums' }}>{formatCLP(accrual.currentCommitment)}</span>
+        </div>
+        <span style={{ font: '400 12px/1.5 Outfit, sans-serif', color: 'var(--color-graphite)', flex: 1, minWidth: 240 }}>
+          Se suma solo con cada cierre y va directo al saldo de la cuenta destino, así que no tienes que sumarlo a mano.
+        </span>
+      </div>
     </div>
   );
 }
+
+const yearHead: CSSProperties = { font: '600 12.5px Outfit, sans-serif', color: 'var(--color-graphite)', minWidth: 96, textAlign: 'right' };
+const yearCell: CSSProperties = { font: '400 13px Outfit, sans-serif', fontVariantNumeric: 'tabular-nums', minWidth: 96, textAlign: 'right' };
 
 const statementHead: CSSProperties = { font: '600 12.5px Outfit, sans-serif', color: 'var(--color-graphite)', minWidth: 96, textAlign: 'right' };
 const statementCell: CSSProperties = { font: '400 14px Outfit, sans-serif', fontVariantNumeric: 'tabular-nums', minWidth: 96, textAlign: 'right' };

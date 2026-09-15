@@ -322,3 +322,37 @@ button {
     padding: 24px 20px 48px;
   }
 }
+
+/* ---- Reporte imprimible: una página, sin la interfaz alrededor ---- */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .report-sheet,
+  .report-sheet * {
+    visibility: visible;
+  }
+  .report-overlay {
+    position: absolute !important;
+    inset: 0 !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  .report-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+  .report-noprint {
+    display: none !important;
+  }
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+}

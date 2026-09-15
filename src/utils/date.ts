@@ -1,3 +1,6 @@
+/** Septiembre 2026 es el primer mes de la historia: antes de eso no hay app. */
+export const FIRST_MONTH = '2026-09-01';
+
 const MONTHS_SHORT = [
   'ene', 'feb', 'mar', 'abr', 'may', 'jun',
   'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
@@ -40,4 +43,19 @@ export function daysUntil(dateStr: string): number {
   today.setHours(0, 0, 0, 0);
   const target = new Date(dateStr + 'T00:00:00');
   return Math.round((target.getTime() - today.getTime()) / 86400000);
+}
+
+export function isBeforeFirstMonth(monthKey: string): boolean {
+  return monthKey < FIRST_MONTH;
+}
+
+/** Meses desde el primero hasta el indicado, inclusive. */
+export function monthsFromStart(until: string): string[] {
+  const out: string[] = [];
+  let cursor = FIRST_MONTH;
+  while (cursor <= until) {
+    out.push(cursor);
+    cursor = addMonths(cursor, 1);
+  }
+  return out;
 }

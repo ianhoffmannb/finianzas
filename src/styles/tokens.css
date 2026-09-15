@@ -68,6 +68,15 @@
   /* ---- Layout ---- */
   --content-max: 1320px;
 
+  /* ---- Colores de gráficos (validados: banda de luminosidad, croma,
+     separación para daltonismo y contraste, en claro y oscuro) ---- */
+  --chart-fijos: #0f4cd9;
+  --chart-ahorro: #0f7a58;
+  --chart-capex: #b07219;
+  --chart-libre: #e6ecf4;
+  --chart-hatch-a: #0f4cd9;
+  --chart-hatch-b: #b9cbf5;
+
   --shadow-menu: 0 18px 44px #0f172914;
 }
 
@@ -95,6 +104,12 @@
     --color-hairline-strong: #2c3648;
     --color-hairline-input: #2c3648;
     --color-border-soft: #232c3d;
+    --chart-fijos: #5f7fe8;
+    --chart-ahorro: #35a67a;
+    --chart-capex: #bc8235;
+    --chart-libre: #232c3d;
+    --chart-hatch-a: #5f7fe8;
+    --chart-hatch-b: #33477a;
   }
 }
 
@@ -121,4 +136,13 @@
   --color-hairline-strong: #2c3648;
   --color-hairline-input: #2c3648;
   --color-border-soft: #232c3d;
+}
+
+:root[data-theme='dark'] {
+  --chart-fijos: #5f7fe8;
+  --chart-ahorro: #35a67a;
+  --chart-capex: #bc8235;
+  --chart-libre: #232c3d;
+  --chart-hatch-a: #5f7fe8;
+  --chart-hatch-b: #33477a;
 }
